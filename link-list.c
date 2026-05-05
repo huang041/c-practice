@@ -93,6 +93,19 @@ void list_destroy(LinkList *list) {
     free(list);
 }
 
+void list_reverse(LinkList *list){
+    Node *cur = list->head;
+    Node *pre = NULL;
+    list->head = list->tail;
+    list->tail = cur;
+    while (cur != NULL) {
+        Node *next = cur->next;
+        cur->next = pre;
+        pre = cur;
+        cur = next;
+    }
+}
+
 int main(){
     LinkList *list = list_init();
 
@@ -115,6 +128,9 @@ int main(){
         free(popped_data); 
     }
     list_show(list, my_int_printer);
-
+    list_reverse(list);
+    printf("After reverse\n");
+    list_show(list, my_int_printer);
+    getchar();
     return 0;
 }

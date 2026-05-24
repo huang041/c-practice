@@ -6,6 +6,9 @@
 typedef int (*hash_func_t)(void *key);
 typedef int (*key_compare_t)(void *key, struct list_head *node_ptr);
 
+// 定義 Callback 格式：使用者會拿到節點指標與一個自定義的參數
+typedef void (*hash_iter_t)(struct list_head *node, void *priv);
+
 static inline uint32_t roundup_pow_of_two(uint32_t n) {
     if (n == 0) return 1;
     n--;
@@ -20,6 +23,7 @@ static inline uint32_t roundup_pow_of_two(uint32_t n) {
 struct hash_table {
     struct list_head *buckets; // 動態陣列，每個元素都是 list_head 
     int bucket_count;          // 桶子數量
+    int count;                 // 目前元素數量
     hash_func_t hash_fn;       // Hash 演算法
     key_compare_t compare_fn;  // Key 比對演算法
 };
@@ -33,6 +37,7 @@ void hash_init(struct hash_table *table, int buckets, hash_func_t h, key_compare
     for(int i =0; i < table->bucket_count; i ++) {
         INIT_LIST_HEAD(&table->buckets[i]);
     }
+    table->count = 0;
 }
 
 struct list_head *hash_find(struct hash_table *table, void *key) {
@@ -55,6 +60,7 @@ struct list_head *hash_add(struct hash_table *table, void* key, struct list_head
 
     int idx = table->hash_fn(key) & (table->bucket_count - 1);
     list_add(new_node, &table->buckets[idx]);
+    table->count++;
     return NULL;
 }
 
@@ -62,6 +68,59 @@ void hash_delete(struct hash_table *table, void* key) {
     struct list_head *node = hash_find(table, key);
     if (node) {
         list_del(node);
+        table->count--;
+    }
+}
+
+int hash_size(struct hash_table *table) {
+    return table->count;
+}
+
+float hash_load_factor(struct hash_table *table) {
+    return (float)table->count / table->bucket_count;
+}
+
+void hash_stats(struct hash_table *table) {
+    int empty_buckets = 0;
+    int max_chain = 0;
+    for (int i = 0; i < table->bucket_count; i++) {
+        int chain_len = 0;
+        struct list_head *pos;
+        if (list_empty(&table->buckets[i])) {
+            continue;
+        }
+        list_for_each(pos, &table->buckets[i]) {
+            chain_len++;
+        }
+        if (chain_len > max_chain) max_chain = chain_len;
+    }
+
+    printf("--- Hash Table Stats ---\n");
+    printf("Total Elements: %d\n", table->count);
+    printf("Bucket Count: %d\n", table->bucket_count);
+    printf("Load Factor%.2f\n", hash_load_factor(table));
+    printf("Empty Buckets: %d\n", empty_buckets);
+    printf("Max Chain Length: %d\n", max_chain);
+    printf("------------------------\n");
+}
+
+void hash_foreach(struct hash_table *table, hash_iter_t iter_fn, void *priv) {
+    for (int i = 0; i < table->bucket_count; i++) {
+        struct list_head *pos, *n;
+        list_for_each_safe(pos, n, &table->buckets[i]) {
+            iter_fn(pos, priv);
+        }
+    }
+}
+
+void hash_clear(struct hash_table *table, void (*free_fn)(struct list_head *)) {
+    for (int i = 0; i < table->bucket_count; i++) {
+        struct list_head *pos, *n;
+        list_for_each_safe(pos, n, &table->buckets[i]) {
+            list_del(pos);
+            table->count--;
+            if (free_fn) free_fn(pos);
+        }
     }
 }
 
@@ -82,6 +141,11 @@ int my_compare_fn(void *key, struct list_head *node_ptr) {
     return (user->uid == id) ? 0 : 1;
 }
 
+void my_free_user_fn(struct list_head *node) {
+    struct user_node *u = list_entry(node, struct user_node, node);
+    free(u);
+}
+
 
 
 void print_menu() {
@@ -90,7 +154,8 @@ void print_menu() {
     printf("2. Find User (ID)\n");
     printf("3. Delete User (ID)\n");
     printf("4. Show All Buckets (Debug)\n");
-    printf("5. Exit\n");
+    printf("5. Clear Table\n");
+    printf("6. Exit\n");
     printf("Selection: ");
 }
 
@@ -166,6 +231,11 @@ int main() {
                 break;
 
             case 5:
+                printf("Clearing...\n");
+                hash_clear(&table, my_free_user_fn);
+                printf("Clear finish...\n");
+                break;
+            case 6:
                 printf("Exiting...\n");
                 return 0;
 

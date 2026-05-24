@@ -2,6 +2,7 @@
 #define _LIST_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 // 1. 核心結構
 struct list_head {
@@ -37,6 +38,10 @@ static inline void list_del(struct list_head *entry) {
     entry->prev = NULL;
 }
 
+static inline bool list_empty(struct list_head *head) {
+    return head->next == head;
+}
+
 static inline void list_replace(struct list_head *old,
 				struct list_head *new)
 {
@@ -55,6 +60,9 @@ static inline void list_replace(struct list_head *old,
 #define container_of(ptr, type, member) \
     ((type *)((char *)(ptr) - offsetof(type, member)))
 #endif
+
+#define list_for_each_safe(pos, n, head) \
+    for (pos = (head)->next, n = pos->next; pos != (head); pos = n, n = pos->next)
 
 #define list_entry(ptr, type, member) \
     container_of(ptr, type, member)
